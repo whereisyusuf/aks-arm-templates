@@ -1,0 +1,200 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "clustername": {
+            "defaultValue": "aksadcluster",
+            "type": "String"
+        },
+        "subnetID": {
+            "type": "String",
+            "metadata": {
+                "description": "The Subnet ID where the AKS cluster is going to be deployed in. Please ensure that this subnet does not have any other resources."
+            }
+        },
+        "osDiskSizeGB": {
+            "defaultValue": 500,
+            "minValue": 0,
+            "maxValue": 1023,
+            "type": "int",
+            "metadata": {
+                "description": "Disk size (in GB) to provision for each of the agent pool nodes. This value ranges from 0 to 1023. Specifying 0 will apply the default disk size for that agentVMSize."
+            }
+        },
+        "agentCount": {
+            "defaultValue": 3,
+            "minValue": 1,
+            "maxValue": 50,
+            "type": "int",
+            "metadata": {
+                "description": "The number of agent nodes for the cluster. Production workloads have a recommended minimum of 3."
+            }
+        },
+        "agentVMSize": {
+            "defaultValue": "Standard_D2_v2",
+            "type": "string",
+            "metadata": {
+                "description": "The size of the Virtual Machine for the default nodepool."
+            }
+        },
+        "kubernetesVersion": {
+            "defaultValue": "1.16.10",
+            "type": "string",
+            "metadata": {
+                "description": "The version of Kubernetes."
+            }
+        },
+        "networkPolicy": {
+            "allowedValues": [
+                "azure",
+                "calico"
+            ],
+            "defaultValue": "azure",
+            "type": "string",
+            "metadata": {
+                "description": "Network Policy to be implemented"
+            }
+        },
+        "maxPods": {
+            "defaultValue": 30,
+            "type": "int",
+            "metadata": {
+                "description": "Maximum number of pods that can run on a node."
+            }
+        },
+        "serviceCidr": {
+            "type": "string",
+            "defaultValue": "10.0.0.0/16",
+            "metadata": {
+                "description": "A CIDR notation IP range from which to assign service cluster IPs. This is different from the subnet ID. These have to be unique for the cluster"
+            }
+        },
+        "dnsServiceIP": {
+            "type": "string",
+            "defaultValue": "10.0.0.10",
+            "metadata": {
+                "description": "Containers DNS server IP address."
+            }
+        },
+        "dockerBridgeCidr": {
+            "type": "string",
+            "defaultValue": "172.17.0.1/16",
+            "metadata": {
+                "description": "A CIDR notation IP for Docker bridge inside the AKS cluster"
+            }
+        },
+        "AAD_ClientAppID":{
+            "type":"securestring",
+            "metadata": {
+                "description": "The Application ID for the Client App Service Principal"
+            }
+        },
+        "AAD_ServerAppID":{
+            "type":"securestring",
+            "metadata": {
+                "description": "The Application ID for the Server App Service Principal"
+            }
+        },
+        "AAD_TenantID":{
+            "type":"securestring",
+            "metadata": {
+                "description": "The Azure AD Tenant where the cluster will reside"
+            }
+        },
+        "AAD_ServerAppSecret":{
+            "type":"securestring",
+            "metadata": {
+                "description": "The Service Principal Secret for the Client App Service Principal"
+            }
+        },
+        "workspaceid": {
+            "type": "String",
+            "metadata": {
+                "description": "Optional DNS prefix to use with hosted Kubernetes API server FQDN."
+            }
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.ContainerService/managedClusters",
+            "apiVersion": "2020-02-01",
+            "name": "[parameters('clustername')]",
+            "location": "eastus",
+            "identity": {
+                "type": "SystemAssigned"
+            },
+            "properties": {
+                "kubernetesVersion": "1.15.10",
+                "dnsPrefix": "[concat(parameters('clustername'), '-dns')]",
+                "agentPoolProfiles": [
+                    {
+                        "name": "agentpool",
+                        "count": "[parameters('agentCount')]",
+                        "vmSize": "[parameters('agentVMSize')]",
+                        "osDiskSizeGB": "[parameters('osDiskSizeGB')]",
+                        "vnetSubnetID": "[parameters('subnetID')]",
+                        "maxPods": "[parameters('maxPods')]",
+                        "type": "VirtualMachineScaleSets",
+                        "orchestratorVersion": "[parameters('kubernetesVersion')]",
+                        "nodeLabels": {},
+                        "osType": "Linux"
+                    }
+                ],
+                "servicePrincipalProfile": {
+                    "clientId": "msi"
+                },
+                "addonProfiles": {
+                    "httpApplicationRouting": {
+                        "enabled": false
+                    },
+                    "omsagent": {
+                        "enabled": true,
+                        "config": {
+                            "logAnalyticsWorkspaceResourceID": "[parameters('workspaceid')]"
+                        }
+                    }
+                },
+                "nodeResourceGroup": "[concat('MC_', parameters('clustername'), '_', parameters('clustername'), '_eastus')]",
+                "enableRBAC": true,
+                "networkProfile": {
+                    "networkPlugin": "azure",
+                    "networkPolicy": "[parameters('networkPolicy')]",
+                    "loadBalancerSku": "Standard",
+                    "serviceCidr": "[parameters('serviceCidr')]",
+                    "dnsServiceIP": "[parameters('dnsServiceIP')]",
+                    "dockerBridgeCidr": "[parameters('dockerBridgeCidr')]",
+                    "outboundType": "loadBalancer"
+                },
+                "aadProfile": {
+                    "clientAppID": "[parameters('AAD_ClientAppID')]",
+                    "serverAppID": "[parameters('AAD_ServerAppID')]",
+                    "serverAppSecret": "[parameters('AAD_ServerAppSecret')]",
+                    "tenantID": "[parameters('AAD_TenantID')]",
+                },
+                "apiServerAccessProfile": {
+                    "enablePrivateCluster": false
+                }
+            }
+        },
+        {
+            "type": "Microsoft.ContainerService/managedClusters/agentPools",
+            "apiVersion": "2020-02-01",
+            "name": "[concat(parameters('clustername'), '/agentpool')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.ContainerService/managedClusters', parameters('clustername'))]"
+            ],
+            "properties": {
+                "count": "[parameters('agentCount')]",
+                "vmSize": "[parameters('agentVMSize')]",
+                "osDiskSizeGB": "[parameters('osDiskSizeGB')]",
+                "vnetSubnetID": "[parameters('subnetID')]",
+                "maxPods": "[parameters('maxPods')]",
+                "type": "VirtualMachineScaleSets",
+                "orchestratorVersion": "[parameters('kubernetesVersion')]",
+                "nodeLabels": {},
+                "osType": "Linux"
+            }
+        }
+    ]
+}
