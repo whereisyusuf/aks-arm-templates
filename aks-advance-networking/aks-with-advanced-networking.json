@@ -7,7 +7,6 @@
             "type": "String"
         },
         "workspaceid": {
-            "defaultValue": "/subscriptions/967b4ee2-f688-4848-939e-8f7e81e738fe/resourceGroups/defaultresourcegroup-eus/providers/microsoft.operationalinsights/workspaces/defaultworkspace-967b4ee2-f688-4848-939e-8f7e81e738fe-eus",
             "type": "String"
         },
         "subnetID": {
