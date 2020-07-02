@@ -1,0 +1,141 @@
+{
+    "$schema": "https://schema.management.azure.com/schemas/2015-01-01/deploymentTemplate.json#",
+    "contentVersion": "1.0.0.0",
+    "parameters": {
+        "clustername": {
+            "defaultValue": "yraks2",
+            "type": "String"
+        },
+        "workspaceid": {
+            "defaultValue": "/subscriptions/967b4ee2-f688-4848-939e-8f7e81e738fe/resourceGroups/defaultresourcegroup-eus/providers/microsoft.operationalinsights/workspaces/defaultworkspace-967b4ee2-f688-4848-939e-8f7e81e738fe-eus",
+            "type": "String"
+        },
+        "subnetID": {
+            "type": "String",
+            "metadata": {
+                "description": "The Subnet ID where the AKS cluster is going to be deployed in. Please ensure that this subnet does not have any other resources."
+            }
+        },
+        "maxPods": {
+            "defaultValue": 10,
+            "type": "int",
+            "metadata": {
+                "description": "Maximum number of pods that can run on a node."
+            }
+        },
+        "serviceCidr": {
+            "type": "string",
+            "defaultValue": "10.150.0.64/28",
+            "metadata": {
+                "description": "A CIDR notation IP range from which to assign service cluster IPs. This is different from the subnet ID. These have to be unique for the cluster"
+            }
+        },
+        "dnsServiceIP": {
+            "type": "string",
+            "defaultValue": "10.150.0.69",
+            "metadata": {
+                "description": "AN IP to associate for DNS services in the cluster. This has to be within the Service CIDR."
+            }
+        },
+
+        "dockerBridgeCIDR": {
+            "type": "string",
+            "defaultValue": "10.150.0.81/28",
+            "metadata": {
+                "description": "A CIDR notation IP range for the docker bridge networking. These have to be unique for the cluster"
+            }
+        },
+        "nodecount": {
+            "defaultValue": 3,
+            "type": "int",
+            "metadata": {
+                "description": "Number of worker nodes to scale to"
+            }
+        },
+        "nodeSize": {
+            "type": "string",
+            "defaultValue": "Standard_DS2_v2",
+            "metadata": {
+                "description": "The size of the worker node"
+            }
+        },
+        "networkPolicy": {
+            "type": "string",
+            "defaultValue": "azure",
+            "allowedValues" : ["azure","calico"],
+            "metadata": {
+                "description": "The size of the worker node"
+            }
+        }
+    },
+    "variables": {},
+    "resources": [
+        {
+            "type": "Microsoft.ContainerService/managedClusters",
+            "apiVersion": "2020-02-01",
+            "name": "[parameters('clustername')]",
+            "location": "eastus",
+            "properties": {
+                "dnsPrefix": "[concat(parameters('clustername'), '-dns')]",
+                "agentPoolProfiles": [
+                    {
+                        "name": "agentpool",
+                        "count": "[parameters('nodecount')]",
+                        "vmSize": "[parameters('nodeSize')]",
+                        "osDiskSizeGB": 100,
+                        "vnetSubnetID": "[parameters('subnetID')]",
+                        "maxPods": "[parameters('maxPods')]",
+                        "type": "VirtualMachineScaleSets",
+                        "nodeLabels": {},
+                        "osType": "Linux"
+                    }
+                ],
+                "addonProfiles": {
+                    "httpApplicationRouting": {
+                        "enabled": false
+                    },
+                    "omsagent": {
+                        "enabled": true,
+                        "config": {
+                            "logAnalyticsWorkspaceResourceID": "[parameters('workspaceid')]"
+                        }
+                    }
+                },
+                "nodeResourceGroup": "[concat('MC_', parameters('clustername'), '_', parameters('clustername'), '_eastus')]",
+                "enableRBAC": true,
+                "networkProfile": {
+                    "networkPlugin": "azure",
+                    "networkPolicy": "[parameters('networkPolicy')]",
+                    "loadBalancerSku": "Standard",
+                    "serviceCidr": "[parameters('serviceCidr')]",
+                    "dnsServiceIP": "[parameters('dnsServiceIP')]",
+                    "dockerBridgeCidr": "[parameters('dockerBridgeCIDR')]"
+                },
+                "apiServerAccessProfile": {
+                    "enablePrivateCluster": false
+                }
+            },
+            "identity": {
+                "type": "SystemAssigned"
+            }
+        },
+        {
+            "type": "Microsoft.ContainerService/managedClusters/agentPools",
+            "apiVersion": "2020-02-01",
+            "name": "[concat(parameters('clustername'), '/agentpool')]",
+            "dependsOn": [
+                "[resourceId('Microsoft.ContainerService/managedClusters', parameters('clustername'))]"
+            ],
+            "properties": {
+                "count": 3,
+                "vmSize": "Standard_DS2_v2",
+                "osDiskSizeGB": 100,
+                "vnetSubnetID": "[parameters('subnetID')]",
+                "maxPods": "[parameters('maxPods')]",
+                "type": "VirtualMachineScaleSets",
+                "nodeLabels": {},
+                "osType": "Linux"
+            }
+        }
+    ]
+}
